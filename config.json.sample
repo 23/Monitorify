@@ -1,0 +1,14 @@
+{
+  server: {host:'127.0.0.1', port:8000},
+  database: {host:'localhost', database:'monitoring', port:27017, username:'', password:''},
+
+  users:[
+    {username:'user1', password:'pass1', email:'user1@example.com'},
+    {username:'user2', password:'pass2', email:'user2@example.com'},
+  ],
+
+  services: [
+    {url:'http://www.examples.com:80/system-stats', key:'1234567890'},
+    {url:'http://data.examples.com:2300/system-stats', key:'abcdefg'},
+  ]
+}

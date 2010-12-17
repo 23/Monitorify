@@ -1,0 +1,11 @@
+# Config files
+config.json
+
+# Temporary files
+*~
+\#*
+.\#*
+
+# Compiled Python files
+*.pyc
+*.pyo
