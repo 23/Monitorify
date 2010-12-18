@@ -6,11 +6,11 @@ This scheme allows different web services to expose a set of tests and metrics t
 
 ## Dependencies
 
-The following dependencies are required by the Visual Analytics v2.0 platform:
+The following dependencies are required by the application:
 
 * pymongo (available using `easy_install pymongo`)
 
-The following dependencies may be required by the Visual Analytics v2.0 platform, depending on the hosting python version:
+The following dependencies may be required by the app, depending on your Python version:
 
 * simplejson (available using `easy_install simplejson`)
 
