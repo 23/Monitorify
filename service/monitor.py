@@ -59,8 +59,8 @@ class MonitorService:
                     self.time = int(time.time())
                     self.info = {'name':data['serviceName'], 'type':data['serviceType'], 'region':data['serviceRegion']}
                     # Remember metrics
-                    self.metrics.custom = data['metrics']
-                    print "%s: Load is %s" % (self.info['name'], self.metrics.custom['serverLoad'])
+                    self.metrics['custom'] = data['metrics']
+                    print "%s: Load is %s" % (self.info['name'], self.metrics['custom']['serverLoad'])
                     status = 'ok'
 
                     # Update tests
@@ -190,10 +190,10 @@ class MonitorTest:
             error = True if float(self.config['monitoring']['errorWarnRatio'])*len(self.resultsSize)>=self else False
 
             # Store tests as a metric
-            self.service.metrics.tests[self.key] = {'totalRequests':len(self.resultsSize), 'totalBytes':sum(self.resultsSize), 'numErrors':self.resultsErrors, 'avgBytes':(sum(self.resultsSize)/len(self.resultsSize)), 'avgTime':(sum(self.resultsTime)/len(self.resultsTime)), 'error':error}
+            self.service.metrics['tests'][self.key] = {'totalRequests':len(self.resultsSize), 'totalBytes':sum(self.resultsSize), 'numErrors':self.resultsErrors, 'avgBytes':(sum(self.resultsSize)/len(self.resultsSize)), 'avgTime':(sum(self.resultsTime)/len(self.resultsTime)), 'error':error}
         else:
             # Nothing useful from the request
-            self.service.metrics.tests[self.key] = {'totalRequests':0, 'totalBytes':0, 'numErrors':self.count, 'avgBytes':0, 'avgTime':0, 'error':True}
+            self.service.metrics['tests'][self.key] = {'totalRequests':0, 'totalBytes':0, 'numErrors':self.count, 'avgBytes':0, 'avgTime':0, 'error':True}
 
         self.service.save()
         sys.stdout.flush()
