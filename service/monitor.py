@@ -1,8 +1,9 @@
 # TODO
-# - Run benchmarks
 # - Write results to Mongo DB
+# - Warn about errors
+# - Require HTTP 200 in tests, otherwise fail 'em
 
-import pymongo, simplejson as json, time, urllib2, socket, sys, traceback, sha, re
+import pymongo, simplejson as json, time, urllib2, socket, sys, traceback, sha, re, threading
 from threading import Timer
 
 class MonitorService:
@@ -17,7 +18,7 @@ class MonitorService:
         # Prepare object for saving check data
         self.info = {}
         self.tests = {}
-        self.metrics = {}
+        self.metrics = {'custom':{}, 'tests':{}}
         self.time = int(time.time())
         self.status = 'loading'
 
@@ -58,8 +59,8 @@ class MonitorService:
                     self.time = int(time.time())
                     self.info = {'name':data['serviceName'], 'type':data['serviceType'], 'region':data['serviceRegion']}
                     # Remember metrics
-                    self.metrics = data['metrics']
-                    print "%s: Load is %s" % (self.info['name'], self.metrics['serverLoad'])
+                    self.metrics.custom = data['metrics']
+                    print "%s: Load is %s" % (self.info['name'], self.metrics.custom['serverLoad'])
                     status = 'ok'
 
                     # Update tests
@@ -78,18 +79,18 @@ class MonitorService:
                 except:
                     # The JSON document didn't meet our requirements
                     self.tests = []
-                    self.metrics = {}
-                    ###traceback.print_exc()
+                    self.metrics = {'custom':{}, 'tests':{}}
+                    traceback.print_exc()
                     status = 'invalid_content'
             except:
                 # The URL didn't return valid JSON
                 self.tests = []
-                self.metrics = {}
+                self.metrics = {'custom':{}, 'tests':{}}
                 status = 'invalid_json'
         except:
             # Couldn't access URL
             self.tests = []
-            self.metrics = {}
+            self.metrics = {'custom':{}, 'tests':{}}
             status = 'invalid_url'
             
         # If status on the endpoint has changed, let's notify
@@ -98,14 +99,13 @@ class MonitorService:
             
         # Save status and return
         self.status = status
-        self.service.save()
+        self.save()
         sys.stdout.flush()
 
 
 
 class MonitorTest:
     """ Class for tests """
-
     def __init__(self, config, service, test):
         # Store config a properties
         self.config = config
@@ -114,12 +114,17 @@ class MonitorTest:
         self.key = test['key']
         self.name = test['name']
         self.url = test['url']
-        self.interval = test['interval']
-        self.count = test['count']
-        self.concurrency = test['concurrency']
+        self.interval = int(test['interval'])
+        self.count = int(test['count'])
+        self.concurrency = int(test['concurrency'])
         self.notifyOnError = test['notifyOnError']
         self.active = True
-        print "%s: Initiate test %s" % (service.info['name'], self.name)
+
+        # We don't want unemployed threads
+        if (self.concurrency>self.count):
+            self.concurrency=self.count
+
+        print "%s: Initiated test %s (i=%s, n=%s, c=%s)" % (service.info['name'], self.name, self.interval, self.count, self.concurrency)
 
         # Explicitly define a timeout on the socket
         socket.setdefaulttimeout(self.config['monitoring']['testTimeout'])
@@ -135,6 +140,24 @@ class MonitorTest:
         if not self.active: return
         Timer(int(self.interval), self.run).start()
 
+    def worker(self, url):
+        # Run tests and tests and tests
+        while(self.outstandingRequests>0):
+            # Begin connection
+            try:
+                begin = time.time()
+                req = urllib2.urlopen(url)
+                # Save time and size for req
+                self.resultsSize.append(len(req.read()))
+                self.resultsTime.append(time.time()-begin)
+            except:
+                # Record an error
+                self.resultsErrors = self.resultsErrors
+
+            # Incr total count of tests
+            self.outstandingRequests = self.outstandingRequests-1
+
+
     def run(self):
         # Are we even still doing this thing?
         if not self.active: return
@@ -142,11 +165,36 @@ class MonitorTest:
         # Already, let's schedule next test
         self.schedule()
 
-        # Run the actual test
-        print "%s: Run test %s (%s)" % (self.service.info['name'], self.name, self.key)
+        # Reset some counters
+        self.outstandingRequests = self.count
+        self.resultsSize = []
+        self.resultsTime = []
+        self.resultsErrors = 0
+        # Start threads for each concurrent connection we want to run in tests
         signed_url = self.service.sign(self.url)
-        # And send then back to the service as a metric
-        self.metrics['test:'+self.key] = {'duration':23, 'name':self.name, 'url':self.url, 'interval':self.interval, 'key':self.key}
+        for i in xrange(self.concurrency):
+            threading.Thread(target=self.worker, args=(signed_url, )).start()
+        # ... and keep 'em running until we're done
+        while(self.outstandingRequests>0):
+            time.sleep(.1)
+
+        if len(self.resultsSize)>0:
+            # Print information about the succesful test
+            print "%s: %s: Total requests: %s" % (self.service.name, self.key, len(self.resultsSize))
+            print "%s: %s: Total bytes: %s" % (self.service.name, self.key, sum(self.resultsSize))
+            print "%s: %s: Num errors: %s" % (self.service.name, self.key, self.resultsErrors)
+            print "%s: %s: Avg bytes: %s" % (self.service.name, self.key, sum(self.resultsSize)/len(self.resultsSize))
+            print "%s: %s: Avg time: %s" % (self.service.name, self.key, sum(self.resultsTime)/len(self.resultsTime))
+
+            # Is this considered an error?
+            error = True if float(self.config['monitoring']['errorWarnRatio'])*len(self.resultsSize)>=self else False
+
+            # Store tests as a metric
+            self.service.metrics.tests[self.key] = {'totalRequests':len(self.resultsSize), 'totalBytes':sum(self.resultsSize), 'numErrors':self.resultsErrors, 'avgBytes':(sum(self.resultsSize)/len(self.resultsSize)), 'avgTime':(sum(self.resultsTime)/len(self.resultsTime)), 'error':error}
+        else:
+            # Nothing useful from the request
+            self.service.metrics.tests[self.key] = {'totalRequests':0, 'totalBytes':0, 'numErrors':self.count, 'avgBytes':0, 'avgTime':0, 'error':True}
+
         self.service.save()
         sys.stdout.flush()
 

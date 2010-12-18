@@ -9,3 +9,7 @@ config.json
 # Compiled Python files
 *.pyc
 *.pyo
+
+# Weird shit
+*.deleted
+service/test.py
