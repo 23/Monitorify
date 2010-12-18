@@ -1,9 +1,8 @@
 # TODO
 # - Run benchmarks
-# - Sign requests
 # - Write results to Mongo DB
 
-import pymongo, simplejson as json, time, urllib2, socket, sys, traceback
+import pymongo, simplejson as json, time, urllib2, socket, sys, traceback, sha, re
 from threading import Timer
 
 class MonitorService:
@@ -30,13 +29,21 @@ class MonitorService:
     def schedule(self):
         Timer(self.config['monitoring']['checkInterval'], self.check).start()
 
+    def sign(self, url):
+        timestamp = int(time.time())
+        url = url + ('&' if re.search("\?", url) else '?') + "timestamp=" + str(timestamp)
+        h = sha.new(self.key)
+        h.update(url + str(timestamp))
+        url = url + "&signature=" + h.hexdigest()
+        return url
+
     def check(self):
         # We will want to run this again soon
         self.schedule()
 
         try: 
             # Request the URL and get data
-            req = urllib2.urlopen(self.url)
+            req = urllib2.urlopen(self.sign(self.url))
             raw = req.read()
 
             try: 
@@ -130,6 +137,8 @@ class MonitorTest:
         self.schedule()
 
         # Run the actual test
+        signed_url = self.service.sign(self.url)
+        print signed_url
         print "%s: Run test %s (%s)" % (self.service.info['name'], self.name, self.key)
 
         # And return by flushing
