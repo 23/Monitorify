@@ -18,6 +18,7 @@ class MonitorService:
         self.info = {}
         self.tests = {}
         self.metrics = {}
+        self.time = int(time.time())
         self.status = 'loading'
 
         # Explicitly define a timeout on the socket
@@ -26,6 +27,9 @@ class MonitorService:
         # And start looping checks
         self.schedule()
         
+    def save(self):
+        return True
+
     def schedule(self):
         Timer(self.config['monitoring']['checkInterval'], self.check).start()
 
@@ -51,6 +55,7 @@ class MonitorService:
                 data = json.loads(raw)
                 try:
                     # Update information about the service
+                    self.time = int(time.time())
                     self.info = {'name':data['serviceName'], 'type':data['serviceType'], 'region':data['serviceRegion']}
                     # Remember metrics
                     self.metrics = data['metrics']
@@ -93,6 +98,7 @@ class MonitorService:
             
         # Save status and return
         self.status = status
+        self.service.save()
         sys.stdout.flush()
 
 
@@ -137,11 +143,11 @@ class MonitorTest:
         self.schedule()
 
         # Run the actual test
-        signed_url = self.service.sign(self.url)
-        print signed_url
         print "%s: Run test %s (%s)" % (self.service.info['name'], self.name, self.key)
-
-        # And return by flushing
+        signed_url = self.service.sign(self.url)
+        # And send then back to the service as a metric
+        self.metrics['test:'+self.key] = {'duration':23, 'name':self.name, 'url':self.url, 'interval':self.interval, 'key':self.key}
+        self.service.save()
         sys.stdout.flush()
 
     def changed(self, test):
