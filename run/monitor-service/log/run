@@ -1,0 +1,5 @@
+#!/bin/sh
+
+username=monitoring
+
+exec chpst -u${username} svlogd -tt /var/log/monitoring/service

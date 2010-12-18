@@ -1,14 +1,15 @@
 {
-  server: {host:'127.0.0.1', port:8000},
-  database: {host:'localhost', database:'monitoring', port:27017, username:'', password:''},
+  "server": {"host":"127.0.0.1", "port":8000},
+  "database": {"host":"localhost", "database":"monitoring", "port":27017, "username":"", "password":""},
+  "monitoring":{"checkInterval":60, "checkTimeout":10},
 
-  users:[
-    {username:'user1', password:'pass1', email:'user1@example.com'},
-    {username:'user2', password:'pass2', email:'user2@example.com'},
+  "users":[
+    {"username":"user1", "password":"pass1", "email":"user1@example.com"},
+    {"username":"user2", "password":"pass2", "email":"user2@example.com"}
   ],
 
-  services: [
-    {url:'http://www.examples.com:80/system-stats', key:'1234567890'},
-    {url:'http://data.examples.com:2300/system-stats', key:'abcdefg'},
+  "services": [
+    {"url":"http://www.example.com:80/monitor-stats", "key":"1234567890"},
+    {"url":"http://analytics.example.com:2300/system-status", "key":"abccbbc"}
   ]
 }

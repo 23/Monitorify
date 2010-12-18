@@ -1,0 +1,12 @@
+#!/bin/sh
+
+username=monitoring
+
+dir=`pwd`
+config_file="${dir}/../../config.json"
+echo 
+
+umask 002
+
+exec 2>&1
+exec "${dir}/../../web/web.py" "${dir}/../../config.json"
