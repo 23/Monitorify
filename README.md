@@ -9,10 +9,12 @@ This scheme allows different web services to expose a set of tests and metrics t
 The following dependencies are required by the application:
 
 * pymongo (available using `easy_install pymongo`)
+* palb (available using `easy_install palb`)
 
 The following dependencies may be required by the app, depending on your Python version:
 
 * simplejson (available using `easy_install simplejson`)
+* pycurl (to use alongside palb for benchmarks; available using `easy_install pycurl`)
 
 ## Configuration and starting
 
