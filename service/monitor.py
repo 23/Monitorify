@@ -2,7 +2,7 @@
 # - Write results to Mongo DB
 
 import calcsize, memsize
-import pymongo, simplejson as json, time, urllib2, socket, sys, traceback, sha, re, palbinterface, random
+import pymongo, simplejson as json, time, urllib2, socket, sys, traceback, sha, re, random, threading, subprocess
 from threading import Timer
 
 class MonitorService:
@@ -19,7 +19,7 @@ class MonitorService:
         self.tests = {}
         self.time = int(time.time())
         self.status = 'loading'
-        self.clear()
+        self.clearData()
 
         # Explicitly define a timeout on the socket
         socket.setdefaulttimeout(self.config['monitoring']['checkTimeout'])
@@ -28,6 +28,7 @@ class MonitorService:
         self.schedule()
         
     def save(self):
+        self.clearData()
         return True
 
     def schedule(self):
@@ -42,7 +43,7 @@ class MonitorService:
         url = url + "&signature=" + h.hexdigest()
         return url
 
-    def clear(self):
+    def clearData(self):
         self.data = {'metrics':{}, 'tests':{}}
 
     def check(self):
@@ -77,27 +78,26 @@ class MonitorService:
                                 # Stop the current test and overwrite with a new one
                                 self.tests[key].stop()
                                 del self.tests[key]
-                                self.tests[key] = MonitorTest(self.config, self, test)
+                                self.tests[key] = MonitorTest(self.config, self, test, False)
                         else:
                             # The is a new test, set it up
-                            x = 1
                             self.tests[key] = MonitorTest(self.config, self, test)
                                 
                 except:
                     # The JSON document didn't meet our requirements
                     self.tests = []
-                    self.clear()
+                    self.clearData()
                     traceback.print_exc()
                     status = 'invalid_content'
             except:
                 # The URL didn't return valid JSON
                 self.tests = []
-                self.clear()
+                self.clearData()
                 status = 'invalid_json'
         except:
             # Couldn't access URL
             self.tests = []
-            self.clear()
+            self.clearData()
             status = 'invalid_url'
             
         # If status on the endpoint has changed, let's notify
@@ -105,7 +105,7 @@ class MonitorService:
             print "%s changed from %s to %s" % (self.url, self.status, status)
 
         #print "size self=%s, tests=%s" % (calcsize.asizeof(self), calcsize.asizeof(self.tests))
-        print "memory memory=%s, resident=%s, stacksize=%s" % (memsize.memory(), memsize.resident(), memsize.stacksize())
+        print "  --> memory memory=%s, resident=%s, stacksize=%s, threads=%s" % (memsize.memory(), memsize.resident(), memsize.stacksize(), threading.activeCount())
             
         # Save status and return
         self.status = status
@@ -116,7 +116,7 @@ class MonitorService:
 
 class MonitorTest:
     """ Class for tests """
-    def __init__(self, config, service, test):
+    def __init__(self, config, service, test, new=True):
         # Store config a properties
         self.config = config
         self.service = service
@@ -136,7 +136,10 @@ class MonitorTest:
         # We shouldn't run test more often than generic checks
         if (self.interval<self.config['monitoring']['checkInterval']): self.interval = self.config['monitoring']['checkInterval']
 
-        print "%s: Initiated test %s (i=%s, n=%s, c=%s)" % (self.service.info['name'], self.name, self.interval, self.count, self.concurrency)
+        if new:
+            print "%s: Initiated test %s (key=%s, i=%s, n=%s, c=%s)" % (self.service.info['name'], self.name, self.key, self.interval, self.count, self.concurrency)
+        else:
+            print "%s: Reinitiated test %s (key=%s, i=%s, n=%s, c=%s) since specs had changed" % (self.service.info['name'], self.name, self.key, self.interval, self.count, self.concurrency)
 
         # Explicitly define a timeout on the socket
         socket.setdefaulttimeout(self.config['monitoring']['testTimeout'])
@@ -161,18 +164,26 @@ class MonitorTest:
 
         try:
             # Run the test, please
-            result = palbinterface.check(self.url, self.count, self.concurrency)
+            # (we're running this as external processes, because palb as a simple module
+            #  turned out to be leaky in term of shutting down its threads.)
+            p = subprocess.Popen('"%s" "%s" "%s" "%s"' % ('/web/monitoring/service/palbinterface.py', self.url, self.count, self.concurrency), shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, close_fds=True)
+            raw = p.stdout.read().strip()
+            result = json.loads(raw)
+
+            
+            #result = palbinterface.check(self.url, self.count, self.concurrency)
             
             # Print information about the succesful test
-            print "%s: %s/%s requests succeced in %.3f seconds" % (self.service.info['name'], result['completed_requests'], result['total_requests'], result['total_time'])
+            print "%s: %s/%s requests for %s succeeded in %.3f seconds" % (self.service.info['name'], result['completed_requests'], result['total_requests'], self.key, result['total_time'])
         
             # Is this considered an error?
             result['error'] = True if float(self.config['monitoring']['errorWarnRatio'])*result['total_requests']>=result['completed_requests'] else False
 
         except:
             # Tetsts failed badly
+            traceback.print_exc()
             print "%s: Test failed totally and completely" % (self.service.info['name'], )
-            results = {'url':self.url, 'concurrency':self.concurrency, 'total_requests':1, 'error':True}
+            result = {'url':self.url, 'concurrency':self.concurrency, 'total_requests':1, 'error':True}
 
         # Store tests as a metric
         self.service.data['tests'][self.key] = result

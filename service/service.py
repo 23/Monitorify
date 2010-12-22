@@ -17,6 +17,7 @@ configFile = os.path.join(os.path.dirname(__file__), sys.argv[1] if len(sys.argv
 config = json.load(open(configFile))
 
 print "Loading services"
+sys.stdout.flush()
 for service in config['services']:
     # Start monitoring service
     MonitorService(config, service)
