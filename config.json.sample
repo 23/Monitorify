@@ -1,7 +1,7 @@
 {
   "server": {"host":"127.0.0.1", "port":8000},
-  "database": {"host":"localhost", "database":"monitoring", "port":27017, "username":"", "password":""},
-  "monitoring":{"checkInterval":60, "checkTimeout":10},
+  "database": {"host":"localhost", "name":"monitoring", "port":27017, "username":"", "password":""},
+  "monitoring":{"checkInterval":60, "checkTimeout":20, "testTimeout":20, "errorWarnRatio":0.1, "maxTestConcurrency":100},
 
   "users":[
     {"username":"user1", "password":"pass1", "email":"user1@example.com"},
