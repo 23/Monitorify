@@ -19,8 +19,10 @@ config = json.load(open(configFile))
 
 print "Loading services"
 sys.stdout.flush()
-worker_threads = ThreadPool(100)
-config['worker_threads'] = worker_threads
+
+# Set up worker threads for running multiple concurrent tests
+config['worker_threads'] = ThreadPool(int(self.config['monitoring']['maxTestConcurrency']))
+
 for service in config['services']:
     # Start monitoring service
     thread.start_new_thread(MonitorService, (config, service))

@@ -1,6 +1,5 @@
 # TODO
 # - Write results to Mongo DB
-# - Headers
 
 #import calcsize, memsize
 import pymongo, simplejson as json, time, urllib2, socket, sys, traceback, sha, re, random, threading, thread, pycurl
@@ -132,6 +131,7 @@ class MonitorTest:
         self.key = test['key']
         self.name = test['name']
         self.url = test['url']
+        self.headers = test['headers'] if 'headers' in test else []
         self.interval = int(test['interval'])
         self.count = int(test['count'])
         self.concurrency = int(test['concurrency'])
@@ -161,6 +161,7 @@ class MonitorTest:
         c.setopt(pycurl.MAXCONNECTS, 1)
         c.setopt(pycurl.FRESH_CONNECT, 1)
         c.setopt(pycurl.URL, self.url)
+        c.setopt(pycurl.HTTPHEADER, self.headers)
         try:
             c.perform()
         except:
@@ -215,10 +216,9 @@ class MonitorTest:
             self.stats = palb.ResultStats()
             self.activeChecks = 0
             for _ in xrange(self.count):
-                #print "Queueing task %d" % _
                 self.config['worker_threads'].queueTask(self.check, None, self.callback)
             while len(self.stats.results)<self.count:
-                time.sleep(1)
+                time.sleep(0.05)
             result = self.getStats()
 
             # Print information about the succesful test
