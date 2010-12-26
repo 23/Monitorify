@@ -10,11 +10,11 @@ The following dependencies are required by the application:
 
 * pymongo (available using `easy_install pymongo`)
 * palb (available using `easy_install palb`)
+* pycurl (available using `easy_install pycurl`)
 
 The following dependencies may be required by the app, depending on your Python version:
 
 * simplejson (available using `easy_install simplejson`)
-* pycurl (to use alongside palb for benchmarks; available using `easy_install pycurl`)
 
 ## Configuration and starting
 
