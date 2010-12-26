@@ -40,6 +40,11 @@ class MonitorService:
         self.run()
         
     def save(self):
+        error = False
+        for _ in self.data['tests']:
+            if self.data['tests'][_]['error']: 
+                error = True
+            
         self.collection.insert({
                 'key':self.key,
                 'url':self.url,
@@ -47,6 +52,7 @@ class MonitorService:
                 'region':self.region,
                 'type':self.type,
                 'name':self.name,
+                'error':error,
                 'interval':self.interval,
                 'status':self.status,
                 'metrics':self.data['metrics'],
