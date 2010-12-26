@@ -1,26 +1,33 @@
-# TODO
-# - Write results to Mongo DB
+"""
+Classes used in Monitoriry: MonitorService + MonitorTest
+Author: Steffen Tiedemann Christensen <steffen@23company.com>
+"""
+
 
 #import calcsize, memsize
-import pymongo, simplejson as json, time, urllib2, socket, sys, traceback, sha, re, random, threading, thread, pycurl
+import simplejson as json, time, urllib2, socket, sys, traceback, sha, re, random, threading, thread, pycurl
 from threading import Timer
 import palb.core as palb
 
 class MonitorService:
     """ Class for handling each monitoring service """
 
-    def __init__(self, config, service):
+    def __init__(self, config, service, db):
         # We shouldn't run all the tests at the exact same time, add some randomness to proceedings
         time.sleep(30*random.random())
 
         # Store config a properties        
         self.config = config
+        self.db = db
+        self.collection = db['checks']
         self.url = service['url']
         self.key = service['key']
         self.interval = int(self.config['monitoring']['checkInterval'])
 
         # Prepare object for saving check data
-        self.info = {}
+        self.name = ""
+        self.region = ""
+        self.type = ""
         self.tests = {}
         self.time = int(time.time())
         self.status = 'loading'
@@ -33,6 +40,18 @@ class MonitorService:
         self.run()
         
     def save(self):
+        self.collection.insert({
+                'key':self.key,
+                'url':self.url,
+                'time':self.time,
+                'region':self.region,
+                'type':self.type,
+                'name':self.name,
+                'interval':self.interval,
+                'status':self.status,
+                'metrics':self.data['metrics'],
+                'tests':self.data['tests']
+                })
         self.clearData()
         return True
 
@@ -49,6 +68,7 @@ class MonitorService:
 
     def run(self):
         monitor_start_time = time.time()
+        self.time = time.time()
         try: 
             # Request the URL and get data
             raw = ''
@@ -62,10 +82,12 @@ class MonitorService:
                 try:
                     # Update information about the service
                     self.time = int(time.time())
-                    self.info = {'name':data['serviceName'], 'type':data['serviceType'], 'region':data['serviceRegion']}
+                    self.name = data['serviceName']
+                    self.type = data['serviceType']
+                    self.region = data['serviceRegion']
                     # Remember metrics
                     self.data['metrics'] = data['metrics']
-                    print "%s: Load is %s" % (self.info['name'], self.data['metrics']['serverLoad'])
+                    print "%s: Load is %s" % (self.name, self.data['metrics']['serverLoad'])
                     status = 'ok'
 
                     # Update tests
@@ -145,9 +167,9 @@ class MonitorTest:
         if (self.interval<self.config['monitoring']['checkInterval']): self.interval = self.config['monitoring']['checkInterval']
 
         if new:
-            print "%s: Initiated test %s (key=%s, i=%s, n=%s, c=%s)" % (self.service.info['name'], self.name, self.key, self.interval, self.count, self.concurrency)
+            print "%s: Initiated test %s (key=%s, i=%s, n=%s, c=%s)" % (self.service.name, self.name, self.key, self.interval, self.count, self.concurrency)
         else:
-            print "%s: Reinitiated test %s (key=%s, i=%s, n=%s, c=%s) since specs had changed" % (self.service.info['name'], self.name, self.key, self.interval, self.count, self.concurrency)
+            print "%s: Reinitiated test %s (key=%s, i=%s, n=%s, c=%s) since specs had changed" % (self.service.name, self.name, self.key, self.interval, self.count, self.concurrency)
         sys.stdout.flush()
         
     def check(self, args):
@@ -201,7 +223,7 @@ class MonitorTest:
 
         x['time_distribution'] = {}
         for percent, seconds in stats.distribution():
-            x['time_distribution'][percent] = seconds*1024
+            x['time_distribution'][str(percent)] = seconds*1024
         return x
 
     def run(self):
@@ -209,7 +231,7 @@ class MonitorTest:
             return
         self.lastRunTime = time.time()
 
-        #print "%s: Running %s" % (self.service.info['name'], self.name)
+        #print "%s: Running %s" % (self.service.name, self.name)
         sys.stdout.flush()
         try:
             # Run the test, please
@@ -222,7 +244,7 @@ class MonitorTest:
             result = self.getStats()
 
             # Print information about the succesful test
-            print "%s: %s/%s requests for %s succeeded in %.3f seconds" % (self.service.info['name'], result['completed_requests'], result['total_requests'], self.name, result['total_time'])
+            print "%s: %s/%s requests for %s succeeded in %.3f seconds" % (self.service.name, result['completed_requests'], result['total_requests'], self.name, result['total_time'])
         
             # Is this considered an error?
             result['error'] = True if float(self.config['monitoring']['errorWarnRatio'])*result['total_requests']>=result['completed_requests'] else False
@@ -233,7 +255,7 @@ class MonitorTest:
                 print raw
             except:
                 x = 1
-            print "%s: Test %s failed totally and completely" % (self.service.info['name'], self.name)
+            print "%s: Test %s failed totally and completely" % (self.service.name, self.name)
             result = {'url':self.url, 'concurrency':self.concurrency, 'total_requests':1, 'error':True}
 
         # Store tests as a metric
