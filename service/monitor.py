@@ -3,9 +3,7 @@ Classes used in Monitoriry: MonitorService + MonitorTest
 Author: Steffen Tiedemann Christensen <steffen@23company.com>
 """
 
-
-#import calcsize, memsize
-import simplejson as json, time, urllib2, socket, sys, traceback, sha, re, random, threading, thread, pycurl
+import simplejson as json, time, datetime, urllib2, socket, sys, traceback, sha, re, random, threading, thread, pycurl
 from threading import Timer
 import palb.core as palb
 
@@ -48,7 +46,7 @@ class MonitorService:
         self.collection.insert({
                 'key':self.key,
                 'url':self.url,
-                'time':self.time,
+                'time':datetime.datetime.utcfromtimestamp(self.time),
                 'region':self.region,
                 'type':self.type,
                 'name':self.name,
@@ -73,79 +71,76 @@ class MonitorService:
         self.data = {'metrics':{}, 'tests':{}}
 
     def run(self):
-        monitor_start_time = time.time()
-        self.time = time.time()
-        try: 
-            # Request the URL and get data
-            raw = ''
-            req = urllib2.urlopen(self.sign(self.url))
-            raw = req.read()
-            del req
-
+        while 1:
+            monitor_start_time = time.time()
+            self.time = time.time()
             try: 
-                # Parse JSON into a python dict
-                data = json.loads(raw)
-                try:
-                    # Update information about the service
-                    self.time = int(time.time())
-                    self.name = data['serviceName']
-                    self.type = data['serviceType']
-                    self.region = data['serviceRegion']
-                    # Remember metrics
-                    self.data['metrics'] = data['metrics']
-                    print "%s: Load is %s" % (self.name, self.data['metrics']['serverLoad'])
-                    status = 'ok'
+                # Request the URL and get data
+                raw = ''
+                req = urllib2.urlopen(self.sign(self.url))
+                raw = req.read()
+                del req
 
-                    # Update tests
-                    for test in data['tests']:
-                        key = test['key']
-                        if key in self.tests:
-                            if self.tests[key].changed(test):
-                                # The test exists, but has changed
-                                # Stop the current test and overwrite with a new one
-                                del self.tests[key]
-                                self.tests[key] = MonitorTest(self.config, self, test, False)
-                        else:
-                            # The is a new test, set it up
-                            self.tests[key] = MonitorTest(self.config, self, test)
+                try: 
+                    # Parse JSON into a python dict
+                    data = json.loads(raw)
+                    try:
+                        # Update information about the service
+                        self.time = int(time.time())
+                        self.name = data['serviceName']
+                        self.type = data['serviceType']
+                        self.region = data['serviceRegion']
+                        # Remember metrics
+                        self.data['metrics'] = data['metrics']
+                        print "%s: Load is %s" % (self.name, self.data['metrics']['serverLoad'])
+                        status = 'ok'
 
-                        # Trigger the tests
-                        self.tests[key].run()
+                        # Update tests
+                        for test in data['tests']:
+                            key = test['key']
+                            if key in self.tests:
+                                if self.tests[key].changed(test):
+                                    # The test exists, but has changed
+                                    # Stop the current test and overwrite with a new one
+                                    del self.tests[key]
+                                    self.tests[key] = MonitorTest(self.config, self, test, False)
+                            else:
+                                # The is a new test, set it up
+                                self.tests[key] = MonitorTest(self.config, self, test)
+
+                            # Trigger the tests
+                            self.tests[key].run()
                                 
+                    except:
+                        # The JSON document didn't meet our requirements
+                        self.tests = []
+                        self.clearData()
+                        traceback.print_exc()
+                        status = 'invalid_content'
                 except:
-                    # The JSON document didn't meet our requirements
+                    # The URL didn't return valid JSON
                     self.tests = []
                     self.clearData()
-                    traceback.print_exc()
-                    status = 'invalid_content'
+                    status = 'invalid_json'
             except:
-                # The URL didn't return valid JSON
+                # Couldn't access URL
                 self.tests = []
                 self.clearData()
-                status = 'invalid_json'
-        except:
-            # Couldn't access URL
-            self.tests = []
-            self.clearData()
-            status = 'invalid_url'
+                status = 'invalid_url'
             
-        # If status on the endpoint has changed, let's notify
-        if self.status is not status:
-            print "%s changed from %s to %s" % (self.url, self.status, status)
+            # If status on the endpoint has changed, let's notify
+            if self.status is not status:
+                print "%s changed from %s to %s" % (self.url, self.status, status)
 
-        #print "  --> memory memory=%s, resident=%s, stacksize=%s, threads=%s" % (memsize.memory(), memsize.resident(), memsize.stacksize(), threading.activeCount())
-            
-        # Save status and return
-        self.status = status
-        self.save()
-        sys.stdout.flush()
+            # Save status and return
+            self.status = status
+            self.save()
+            sys.stdout.flush()
 
-        # Do this again, later (with a bit of randomness +/- 5%)
-        sleep_time = (self.interval - (time.time() - monitor_start_time)) * (0.95+(random.random()/10.0))
-        ###print "sleep_time=%s (%s %s %s %s %s %s)" % (sleep_time, self.interval, time.time(), monitor_start_time, 0.95+random.random()/10.0, time.time()-monitor_start_time, self.interval - (time.time() - monitor_start_time))
-        sys.stdout.flush()
-        if(sleep_time>0): time.sleep(sleep_time)
-        self.run()
+            # Do this again, later (with a bit of randomness +/- 5%)
+            sleep_time = (self.interval - (time.time() - monitor_start_time)) * (0.95+(random.random()/10.0))
+            sys.stdout.flush()
+            if(sleep_time>0): time.sleep(sleep_time)
 
 
 class MonitorTest:
