@@ -1,5 +1,5 @@
 """
-Classes used in Monitoriry: MonitorService + MonitorTest
+Classes used in Monitorify: MonitorService + MonitorTest
 Author: Steffen Tiedemann Christensen <steffen@23company.com>
 """
 
@@ -13,6 +13,9 @@ class MonitorService:
     def __init__(self, config, service, db):
         # We shouldn't run all the tests at the exact same time, add some randomness to proceedings
         time.sleep(30*random.random())
+
+        print "initing from %s" % service['url']
+        sys.stdout.flush()
 
         # Store config a properties        
         self.config = config
@@ -60,6 +63,8 @@ class MonitorService:
         return True
 
     def sign(self, url):
+        print "Warning: Signing is disabled for now"
+        return url
         timestamp = int(time.time())
         url = url + ('&' if re.search("\?", url) else '?') + "timestamp=" + str(timestamp)
         h = sha.new(self.key)
@@ -77,7 +82,8 @@ class MonitorService:
             try: 
                 # Request the URL and get data
                 raw = ''
-                req = urllib2.urlopen(self.sign(self.url))
+                signed_url = self.sign(self.url)
+                req = urllib2.urlopen(signed_url)
                 raw = req.read()
                 del req
 
@@ -92,7 +98,10 @@ class MonitorService:
                         self.region = data['serviceRegion']
                         # Remember metrics
                         self.data['metrics'] = data['metrics']
-                        print "%s: Load is %s" % (self.name, self.data['metrics']['serverLoad'])
+                        try:
+                            print "%s: Load is %s" % (self.name, self.data['metrics']['serverLoad'])
+                        except:
+                            ignore = 1
                         status = 'ok'
 
                         # Update tests
@@ -113,24 +122,24 @@ class MonitorService:
                                 
                     except:
                         # The JSON document didn't meet our requirements
-                        self.tests = []
+                        self.tests = {}
                         self.clearData()
                         traceback.print_exc()
                         status = 'invalid_content'
                 except:
                     # The URL didn't return valid JSON
-                    self.tests = []
+                    self.tests = {}
                     self.clearData()
                     status = 'invalid_json'
             except:
                 # Couldn't access URL
-                self.tests = []
+                self.tests = {}
                 self.clearData()
                 status = 'invalid_url'
             
             # If status on the endpoint has changed, let's notify
             if self.status is not status:
-                print "%s changed from %s to %s" % (self.url, self.status, status)
+                print "%s changed from %s to %s (region: %s, type: %s)" % (self.url, self.status, status, self.region, self.type)
 
             # Save status and return
             self.status = status
