@@ -1,4 +1,5 @@
-import simplejson as json, cherrypy
+import simplejson as json, cherrypy, pymongo
+from pymongo import json_util
 
 class Controller:
     """ API handler class """
@@ -10,16 +11,13 @@ class Controller:
 
     @cherrypy.expose
     def filters(self):
-        row = self.db.filters.find_one()
-        cherrypy.response.headers['Content-Type'] = 'application/json'
-        return json.dumps({
-                'regions':row['regions'],
-                'types':row['types'],
-                'names':row['names'],
-                'min_time':row['min_time']
-                })
+        cherrypy.response.headers['Content-Type'] = 'text/plain'
+        return json.dumps(self.db.filters.find_one(), default=json_util.default)
 
     @cherrypy.expose
     def data(self):
-        cherrypy.response.headers['Content-Type'] = 'application/json'
-        return 'data'
+        cherrypy.response.headers['Content-Type'] = 'text/plain'
+        list = []
+        for row in self.db.checks.find().limit(200):
+            list.append(json.dumps(row, default=json_util.default))
+        return "[%s]" % ', '.join(list)
