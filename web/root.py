@@ -4,11 +4,13 @@ from cherrypy.lib.static import serve_file
 class Controller:
     """ Primary handler class """
 
-    def __init__(self, config):
+    def __init__(self, config, db):
         # Open the configuration file
         self.config = config
-        self.api = api.Controller(config);
+        self.db = db
 
+        # Map in classes to sub-URLs
+        self.api = api.Controller(self.config, self.db);
 
     @cherrypy.expose
     def index(self):

@@ -13,6 +13,9 @@ from pymongo import Connection
 configFile = os.path.join(os.path.dirname(__file__), sys.argv[1] if len(sys.argv)>=2 else 'config.json')
 config = json.load(open(configFile))
 
+# Open connection to the database
+db = Connection(config['database']['host'], config['database']['port'])[config['database']['name']]
+
 # Build into a cherrypy config
 cherrypy_conf = {
     'global': {
@@ -33,5 +36,5 @@ cherrypy_conf = {
 # Import controllers
 import cherrypy, root
 # Initialize the server quickly
-cherrypy.quickstart(root.Controller(config), config=cherrypy_conf)
+cherrypy.quickstart(root.Controller(config, db), config=cherrypy_conf)
 
