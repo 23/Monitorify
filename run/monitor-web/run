@@ -9,4 +9,4 @@ echo
 umask 002
 
 exec 2>&1
-exec "${dir}/../../web/web.py" "${dir}/../../config.json"
+exec "${dir}/../../web/application.py" "${dir}/../../config.json"

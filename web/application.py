@@ -22,7 +22,7 @@ cherrypy_conf = {
         'tools.encode.on':True,
         'tools.decode.on':True,
         'tools.gzip.on':True,
-        'tools.staticdir.root':os.path.abspath(os.path.dirname(os.path.dirname(__file__))),
+        'tools.staticdir.root':os.path.abspath(os.path.join(os.path.dirname(__file__))),
         },
     '/assets': {
         'tools.staticdir.on':True,
