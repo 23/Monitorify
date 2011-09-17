@@ -3,9 +3,11 @@ Classes used in Monitorify: MonitorService + MonitorTest
 Author: Steffen Tiedemann Christensen <steffen@23company.com>
 """
 
-import simplejson as json, time, datetime, urllib2, socket, sys, traceback, sha, re, random, threading, thread, pycurl
+import sys; sys.stdout = sys.stderr
+import simplejson as json, time, datetime, urllib2, socket, traceback, sha, re, random, threading, thread, pycurl
 from threading import Timer
 import palb.core as palb
+from bson.code import Code
 
 class MonitorService:
     """ Class for handling each monitoring service """
@@ -15,7 +17,6 @@ class MonitorService:
         time.sleep(30*random.random())
 
         print "initing from %s" % service['url']
-        sys.stdout.flush()
 
         # Store config a properties        
         self.config = config
@@ -63,7 +64,7 @@ class MonitorService:
         return True
 
     def sign(self, url):
-        print "Warning: Signing is disabled for now"
+        ###print "Warning: Signing is disabled for now"
         return url
         timestamp = int(time.time())
         url = url + ('&' if re.search("\?", url) else '?') + "timestamp=" + str(timestamp)
@@ -98,10 +99,6 @@ class MonitorService:
                         self.region = data['serviceRegion']
                         # Remember metrics
                         self.data['metrics'] = data['metrics']
-                        try:
-                            print "%s: Load is %s" % (self.name, self.data['metrics']['serverLoad'])
-                        except:
-                            ignore = 1
                         status = 'ok'
 
                         # Update tests
@@ -144,11 +141,9 @@ class MonitorService:
             # Save status and return
             self.status = status
             self.save()
-            sys.stdout.flush()
 
             # Do this again, later (with a bit of randomness +/- 5%)
             sleep_time = (self.interval - (time.time() - monitor_start_time)) * (0.95+(random.random()/10.0))
-            sys.stdout.flush()
             if(sleep_time>0): time.sleep(sleep_time)
 
 
@@ -180,7 +175,6 @@ class MonitorTest:
             print "%s: Initiated test %s (key=%s, i=%s, n=%s, c=%s)" % (self.service.name, self.name, self.key, self.interval, self.count, self.concurrency)
         else:
             print "%s: Reinitiated test %s (key=%s, i=%s, n=%s, c=%s) since specs had changed" % (self.service.name, self.name, self.key, self.interval, self.count, self.concurrency)
-        sys.stdout.flush()
         
     def check(self, args):
         while self.activeChecks>self.concurrency: 
@@ -197,6 +191,7 @@ class MonitorTest:
         try:
             c.perform()
         except:
+            print "%s: Error checking url=%s" % (self.service.name, self.url)
             import traceback
             traceback.print_exc()
             self.activeChecks -= 1
@@ -242,7 +237,6 @@ class MonitorTest:
         self.lastRunTime = time.time()
 
         #print "%s: Running %s" % (self.service.name, self.name)
-        sys.stdout.flush()
         try:
             # Run the test, please
             self.stats = palb.ResultStats()
@@ -270,10 +264,63 @@ class MonitorTest:
 
         # Store tests as a metric
         self.service.data['tests'][self.key] = result
-        sys.stdout.flush()
 
     def changed(self, test):
         # Check if the passed in test setup is different from the one set up with this object?
         return False if self.originalTest==test else True
 
 
+class MonitorDenormalize:
+    """ Class for denormalizing stuff within the service """
+    
+    def __init__(self, config, db):
+        print "Starting denormalize service"
+
+        # Store config a properties
+        self.config = config
+        self.db = db
+
+        while 1:
+            try:
+                self.denormalize()
+            except:
+                import traceback
+                traceback.print_exc()
+
+            # Wait, then repeat
+            time.sleep(180)
+        
+    def denormalize(self):
+        print "Denorm: Beginning denormalization routine"
+        
+        # Get distinct values for region, type and name
+        regions = self.db['checks'].distinct('region');
+        types = self.db['checks'].distinct('type');
+        names = self.db['checks'].distinct('name');
+
+        # Get the first date in the list of checks
+        map = Code("function() {emit('times', {min:this.time, max:this.time});}")
+        reduce = Code("function(key,values) {"
+                      "    res = values[0];"
+                      "    values.forEach(function(value){"
+                      "        res.min = Math.min(res.min, value.min);"
+                      "        res.max = Math.max(res.max, value.max);"
+                      "    });"
+                      "    return(res);"
+                      "}")
+        result = self.db['checks'].map_reduce(map, reduce, "filterstime")
+        row = self.db['filterstime'].find_one()
+        min_time = int(row['value']['min'])
+        max_time = int(row['value']['max'])
+        print "Denorm: min_time=%s, max_time=%s" % (min_time, max_time)
+        
+        # Save stuff to the database
+        self.db['filters'].update({}, {
+                'regions':regions, 
+                'types':types, 
+                'names':names,
+                'min_time':min_time,
+                'max_time':max_time
+                }, True);
+
+        print "Denorm: Ending denormalization routine"

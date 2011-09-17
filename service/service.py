@@ -32,6 +32,9 @@ for service in config['services']:
     # Start monitoring service
     thread.start_new_thread(MonitorService, (config, service, db))
 
+# Start denormalizing from time to time
+thread.start_new_thread(MonitorDenormalize, (config, db))
+
 
 
 
