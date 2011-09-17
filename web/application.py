@@ -27,10 +27,6 @@ cherrypy_conf = {
     '/assets': {
         'tools.staticdir.on':True,
         'tools.staticdir.dir':'assets',
-        },
-    '/index': {
-        'tools.staticfile.on':True,
-        'tools.staticfile.filename':os.path.abspath(os.path.join(os.path.dirname(__file__), 'index.html')),
         }
     }
 
