@@ -11,12 +11,12 @@ class Controller:
 
     @cherrypy.expose
     def filters(self):
-        cherrypy.response.headers['Content-Type'] = 'text/plain'
+        cherrypy.response.headers['Content-Type'] = 'application/json'
         return json.dumps(self.db.filters.find_one(), default=json_util.default)
 
     @cherrypy.expose
-    def data(self):
-        cherrypy.response.headers['Content-Type'] = 'text/plain'
+    def data(self, type=None, region=None, name=None, from_date=None, to_date=None):
+        cherrypy.response.headers['Content-Type'] = 'application/json'
         list = []
         for row in self.db.checks.find().limit(200):
             list.append(json.dumps(row, default=json_util.default))

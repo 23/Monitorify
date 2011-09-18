@@ -13,5 +13,6 @@ class Controller:
         self.api = api.Controller(self.config, self.db);
 
     @cherrypy.expose
-    def index(self):
+    def default(self, x1=None, x2=None, x3=None, x4=None, x5=None, x6=None, x7=None):
         return serve_file(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'index.html'), content_type='text/html')
+
